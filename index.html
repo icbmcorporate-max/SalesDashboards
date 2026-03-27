@@ -12,7 +12,13 @@
 <div class="mo" id="mdl" style="display:none" onclick="if(event.target===this)cMdl()"><div class="mc"><h3 id="mT"><span></span><button class="x" onclick="cMdl()">&times;</button></h3><div id="mB"></div></div></div>
 <script>
 var ED=null,nM=0,nS=0,nC=0,TK=1;
-var URLS=["https://docs.google.com/spreadsheets/d/1LtqtuVonLWkrovdr1RIrVWrYRHpgbI3TNd6Tw4zNvn8/gviz/tq?tqx=out:csv&sheet=External","https://docs.google.com/spreadsheets/d/1LtqtuVonLWkrovdr1RIrVWrYRHpgbI3TNd6Tw4zNvn8/gviz/tq?tqx=out:csv","https://docs.google.com/spreadsheets/d/1LtqtuVonLWkrovdr1RIrVWrYRHpgbI3TNd6Tw4zNvn8/export?format=csv&gid=0"];
+var SHEET_ID="1LtqtuVonLWkrovdr1RIrVWrYRHpgbI3TNd6Tw4zNvn8";
+var URLS=[
+"https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv&sheet=External",
+"https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/gviz/tq?tqx=out:csv",
+"https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid=0",
+"https://corsproxy.io/?url="+encodeURIComponent("https://docs.google.com/spreadsheets/d/"+SHEET_ID+"/export?format=csv&gid=0")
+];
 var ALL_RAW=[],RAW=[],DL={},AT='ov',CH={},RANGE=6,LIVE=true;
 var F={mo:[],r:[],s:[],l2:[],l1:[],c:[],k:[]};
 var CC=['#2563eb','#7c3aed','#10b981','#f59e0b','#ef4444','#f97316','#06b6d4','#ec4899','#14b8a6'];
@@ -25,16 +31,20 @@ function gM(){return F.mo.length?F.mo:DL.mo}
 Chart.defaults.color='#7b8ba8';Chart.defaults.font.family='DM Sans';
 
 function fetchData(){document.getElementById('ldMsg').textContent='Connecting to Google Sheets...';document.getElementById('loader').style.display='flex';tryUrl(0)}
-function tryUrl(i){if(i>=URLS.length){document.getElementById('ldMsg').textContent='Cannot connect. Ensure the sheet is Published to Web (File > Share > Publish to web).';return}
+function tryUrl(i){if(i>=URLS.length){document.getElementById('ldMsg').textContent='Cannot connect. Please ensure:\n1. Sheet is shared (Anyone with link can view)\n2. File > Share > Publish to web > CSV\n3. Reload this page';return}
 document.getElementById('ldMsg').textContent='Connecting ('+(i+1)+'/'+URLS.length+')...';
-Papa.parse(URLS[i],{download:true,header:true,dynamicTyping:true,skipEmptyLines:true,
-complete:function(res){var valid=res.data.filter(function(r){return r.Store&&r.Month&&r.Tertiary});
-if(valid.length<10){tryUrl(i+1);return}
+fetch(URLS[i],{redirect:'follow'}).then(function(resp){
+if(!resp.ok)throw new Error(resp.status);
+return resp.text()}).then(function(text){
+if(text.indexOf('<!DOCTYPE')>=0||text.indexOf('<html')>=0||text.length<100){throw new Error('Got HTML not CSV')}
+var res=Papa.parse(text,{header:true,dynamicTyping:true,skipEmptyLines:true});
+var valid=res.data.filter(function(r){return r.Store&&r.Month&&r.Tertiary});
+if(valid.length<10){throw new Error('Only '+valid.length+' valid rows')}
 ALL_RAW=valid;ALL_RAW.forEach(function(r){r._t=parseFloat(r.Tertiary)||0;r._u=parseInt(r.Units)||0;r._m=String(r.Month||'');r._s=String(r.State||'');r._r=String(r.Region||'');r._c=String(r.Category||'');r._sn=String(r['Store Name']||'').substring(0,16);r._sid=r.Store;r._l1=String(r['L1 Mapping']||'');r._l2=String(r['L2 Mapping']||'');r._k=String(r['SKU Name']||'')});
 applyRange();document.getElementById('loader').style.display='none';
 document.getElementById('srcL').textContent=RAW.length+' rows \u2022 '+DL.mo.length+'M \u2022 '+new Set(RAW.map(function(r){return r._sid})).size+' stores';
-document.getElementById('ldT').textContent='\u2705 '+new Date().toLocaleTimeString()},
-error:function(){tryUrl(i+1)}})}
+document.getElementById('ldT').textContent='\u2705 '+new Date().toLocaleTimeString()
+}).catch(function(e){console.log('URL '+i+' failed: '+e.message);tryUrl(i+1)})}
 
 function setRange(n,btn){RANGE=n;document.querySelectorAll('#rangeBar button').forEach(function(b){b.classList.remove('on')});btn.classList.add('on');if(ALL_RAW.length>0)applyRange()}
 function applyRange(){var allMonths=[...new Set(ALL_RAW.map(function(r){return r._m}))].sort();
